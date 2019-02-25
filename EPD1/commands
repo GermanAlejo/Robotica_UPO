@@ -1,0 +1,32 @@
+COMMANDS:
+
+ROSPACK to get information about packages
+
+$ rospack find [package_name]
+
+ROSCD chage directory like cd to a package
+
+$ roscd [locationname[/subdir]] //change directory
+
+$ pwd print working directory
+
+$echo $ROS_PACKAGE_PATH 
+
+$roscd log //shows folder where ROS log files are if you never executed a ROS program
+nothing will be promted
+
+ROSLS list like ls but durectly without absolute path requirement
+
+$rosls [locationname[/subdir]]
+
+######################
+catkin Package{
+	compliant paclage.xml
+	CMakeList.txt
+	have its own folder
+}
+
+#To create catkin packages
+catkin_create_pkg <package_name> [depend1] [depend2] [depend3]
+
+Always do source devel/setup.bash

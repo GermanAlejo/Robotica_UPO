@@ -81,7 +81,8 @@ bool Turtlebot::command(double gx, double gy)
 
 	double linear_vel=0.0;
 	double angular_vel=0.0;
-	
+	float dist;
+  float ang = 0.0;
 	bool ret_val = false;
 
 	//Transform the goal to the local frame
@@ -116,7 +117,27 @@ bool Turtlebot::command(double gx, double gy)
 	* The angular velocity should be proportional to the difference in the angle towards
 	* the goal and the current angle of the robot. You should check if you reached the goal
 	*/
-	
+	 //calculate angle if is minimal then we are looking towards the goal
+  ang = atan2(base_goal.point.y, base_goal.point.x);
+  ang = ang*180/M_PI;
+  
+  if(ang > 5.0){
+    angular_vel = 0.5;
+	    	//ROS_INFO("ang:");
+    linear_vel = 0.0;
+  }else if (ang < -5.0){
+    angular_vel = -0.5;
+    linear_vel = 0.0;
+  }
+  //calculate the module of base_goal to know distast towards objective
+   dist = sqrt(pow(base_goal.point.x, 2) + pow(base_goal.point.y, 2));
+  
+	if(abs(dist < 0.5)){
+		linear_vel =0.0;
+    angular_vel=0.0;
+	}else{
+    linear_vel = 0.5;
+  }
 
 
         publish(angular_vel,linear_vel);    
@@ -151,41 +172,47 @@ void Turtlebot::receiveKinect(const sensor_msgs::LaserScan& msg)
 	// Different variables used to detect obstacles
   //calcula tamaño del vector
   int rangeSize = (int) (data_scan.angle_max - data_scan.angle_min)/data_scan.angle_increment;
-  int i = rangeSize/2;
-  int j = rangeSize/2;
+  int i = 1;
+  int arrayX[rangeSize];
+  int arrayY[rangeSize];
+  int pX, pY, numObs=0;//puntos del vector
+  int rangeDist;
+  float rangeAng;
   
-  while(i>rangeSize || j<0){
-  
-    if(data_scan.ranges[i] != NaN){
-      
-      if(fitsI(i) == true){
-        j=-1;
-      }
-    }
-  i++;
+  while(i<=rangeSize){
     
-    if(data_scan.ranges[j]!= NaN){
-      if(fitsY(i)==true){
-        j-1;
-      }
+    if(data_scan.ranges[i] != isNaN()){
+      numObs++;
+      rangeAng = data_scan.angle_min * i * data_scan.angle_increment;//calculo del angulo del vector
+      
+      rangeDist = data_scan.ranges[i];//distancia al punto
+      //obtenemos todos los puntos 
+      arrayX[i] = rangeDist * cos(data_scan.angle_max);
+      arrayY[i] = rangeDist * sin(data_scan.angle_max);
+      
+            
+      
     }
-    j--;
+    
   }
+  
+  i=0;
+  
+  //calculo del vector resultante
+  while(i < numObs){
+    
+    pX += arrayX[i];
+    pY += arrayY[i];
+    
+    i++;
+  }
+  
+  pX = -pX;
+  pY = -pY;
 }
 	
 
 
-
-//checks if robot fits the gap
-void fitsI(int i){
-  int x;
-  j=i;
-  while(data_scan.ranges[j]==NaN){
-    j++;
-  }
-  
-
-}
 
 void visualizePlan(const std::vector<geometry_msgs::Pose> &plan, ros::Publisher &marker_pub );
 

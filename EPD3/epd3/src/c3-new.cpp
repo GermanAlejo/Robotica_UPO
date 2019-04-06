@@ -19,6 +19,10 @@
 // Representation (RVIZ)
 #include <visualization_msgs/Marker.h>
 
+	bool res = false;//variable that represents whether theres objects or no objects at all
+  int tempX, tempY;
+	int vectorResX = 0;
+	int vectorResY = 0;
 /**
 * Our class to control the robot
 * It has members to store the robot pose, and
@@ -43,10 +47,6 @@ private:
   ros::NodeHandle nh_;
   //controls if robot is facing an object
   bool resKinetic = false;
-	bool res = false;//variable that represents whether theres objects or no objects at all
-  int tempX, tempY;
-	int vectorResX = 0;
-	int vectorResY = 0;
   
   //2D robot pose
   double x,y,theta;
@@ -176,7 +176,7 @@ void Turtlebot::receiveKinect(const sensor_msgs::LaserScan& msg)
   	//calcula tamaño del vector
   	int rangeSize = (int) (data_scan.angle_max - data_scan.angle_min)/data_scan.angle_increment;
   	int i = 1;
-  	int pX, pY, numObs=0;//puntos del vector
+  	int pX = 0, pY = 0, numObs=0;//puntos del vector
   	int rangeDist;
   	float rangeAng;
 	
@@ -192,12 +192,12 @@ void Turtlebot::receiveKinect(const sensor_msgs::LaserScan& msg)
 
 			rangeDist = data_scan.ranges[i];//distancia al punto
 			//obtenemos todos los puntos 
-			px = rangeDist * cos(rangeAng);
-			py = rangeDist * sin(rangeAng);
+			pX = rangeDist * cos(rangeAng);
+			pY = rangeDist * sin(rangeAng);
 
 			//sum all vectors with objects to obtain the result vector
-			vectorResX += px;
-			vectorResY += py;
+			::vectorResX += pX;
+			::vectorResY += pY;
 		
       
     		}
@@ -228,7 +228,8 @@ int main(int argc, char** argv)
   Turtlebot robot;
   ros::NodeHandle n;
 
-
+  int xGoal, yGoal;
+  
   if(argc<2)
   {
 	std::cout << "Insufficient number of parameters" << std::endl;
@@ -251,6 +252,10 @@ int main(int argc, char** argv)
   {
 	  //como se hace la llamada a la funcion kinect que parametro se pasa
     //receiveKinect
+    
+    
+    xGoal = plan[cont_wp].position.x;
+    yGoal = plan[cont_wp].position.y;
     
     if(res){
 		//calculate vector to avoid object

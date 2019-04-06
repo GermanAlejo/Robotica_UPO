@@ -43,7 +43,10 @@ private:
   ros::NodeHandle nh_;
   //controls if robot is facing an object
   bool resKinetic = false;
-  double tempX, tempY;
+	bool res = false;//variable that represents whether theres objects or no objects at all
+  int tempX, tempY;
+	int vectorResX = 0;
+	int vectorResY = 0;
   
   //2D robot pose
   double x,y,theta;
@@ -82,7 +85,7 @@ bool Turtlebot::command(double gx, double gy)
 	double linear_vel=0.0;
 	double angular_vel=0.0;
 	float dist;
-  float ang = 0.0;
+  	float ang = 0.0;
 	bool ret_val = false;
 
 	//Transform the goal to the local frame
@@ -170,45 +173,45 @@ void Turtlebot::receiveKinect(const sensor_msgs::LaserScan& msg)
 {
 	data_scan=msg;
 	// Different variables used to detect obstacles
-  //calcula tamaño del vector
-  int rangeSize = (int) (data_scan.angle_max - data_scan.angle_min)/data_scan.angle_increment;
-  int i = 1;
-  int arrayX[rangeSize];
-  int arrayY[rangeSize];
-  int pX, pY, numObs=0;//puntos del vector
-  int rangeDist;
-  float rangeAng;
+  	//calcula tamaño del vector
+  	int rangeSize = (int) (data_scan.angle_max - data_scan.angle_min)/data_scan.angle_increment;
+  	int i = 1;
+  	int pX, pY, numObs=0;//puntos del vector
+  	int rangeDist;
+  	float rangeAng;
+	
+	if(!isnan(data_scan.range_min)){
   
-  while(i<=rangeSize){
+		res = true;//theres an object ahead
+		
+  		while(i<=rangeSize){
     
-    if(data_scan.ranges[i] != isNaN()){
-      numObs++;
-      rangeAng = data_scan.angle_min * i * data_scan.angle_increment;//calculo del angulo del vector
+    		if(!isnan(data_scan.ranges[i])){
+			numObs++;
+			rangeAng = data_scan.angle_min * i * data_scan.angle_increment;//calculo del angulo del vector
+
+			rangeDist = data_scan.ranges[i];//distancia al punto
+			//obtenemos todos los puntos 
+			px = rangeDist * cos(rangeAng);
+			py = rangeDist * sin(rangeAng);
+
+			//sum all vectors with objects to obtain the result vector
+			vectorResX += px;
+			vectorResY += py;
+		
       
-      rangeDist = data_scan.ranges[i];//distancia al punto
-      //obtenemos todos los puntos 
-      arrayX[i] = rangeDist * cos(data_scan.angle_max);
-      arrayY[i] = rangeDist * sin(data_scan.angle_max);
-      
-            
-      
-    }
+    		}
     
-  }
+  		}
+		
+		vectorResX = -vectorResX;
+		vectorResY = -vectorResY; 
+	}else{
+		//theres no object ahead;
+		res = false;
+	}
   
-  i=0;
-  
-  //calculo del vector resultante
-  while(i < numObs){
-    
-    pX += arrayX[i];
-    pY += arrayY[i];
-    
-    i++;
-  }
-  
-  pX = -pX;
-  pY = -pY;
+
 }
 	
 
@@ -218,6 +221,7 @@ void visualizePlan(const std::vector<geometry_msgs::Pose> &plan, ros::Publisher 
 
 std::vector<geometry_msgs::Pose> loadPlan(const char *filename);
 
+//this is main fuction
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "robot_control");
@@ -245,9 +249,13 @@ int main(int argc, char** argv)
 
   while (ros::ok())
   {
-    receiveKinect
+	  //como se hace la llamada a la funcion kinect que parametro se pasa
+    //receiveKinect
     
     if(res){
+		//calculate vector to avoid object
+		tempX = xGoal + vectorResX;
+		tempY = yGoal + vectorResY;
       robot.command(tempX, tempY);
     }else{
     

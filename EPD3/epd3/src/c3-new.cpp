@@ -45,8 +45,7 @@ private:
 
   
   ros::NodeHandle nh_;
-  //controls if robot is facing an object
-  bool resKinetic = false;
+ 
   
   //2D robot pose
   double x,y,theta;
@@ -88,6 +87,7 @@ bool Turtlebot::command(double gx, double gy)
   	float ang = 0.0;
 	bool ret_val = false;
 
+  std::cout <<"llamando al command" <<std::endl;
 	//Transform the goal to the local frame
 	geometry_msgs::PointStamped goal;
 	geometry_msgs::PointStamped base_goal;
@@ -121,6 +121,8 @@ bool Turtlebot::command(double gx, double gy)
 	* the goal and the current angle of the robot. You should check if you reached the goal
 	*/
 	 //calculate angle if is minimal then we are looking towards the goal
+  
+  std::cout <<"command" <<std::endl;
   ang = atan2(base_goal.point.y, base_goal.point.x);
   ang = ang*180/M_PI;
   
@@ -141,7 +143,6 @@ bool Turtlebot::command(double gx, double gy)
 	}else{
     linear_vel = 0.5;
   }
-
 
         publish(angular_vel,linear_vel);    
 
@@ -196,8 +197,8 @@ void Turtlebot::receiveKinect(const sensor_msgs::LaserScan& msg)
 			pY = rangeDist * sin(rangeAng);
 
 			//sum all vectors with objects to obtain the result vector
-			::vectorResX += pX;
-			::vectorResY += pY;
+			vectorResX += pX;
+			vectorResY += pY;
 		
       
     		}
@@ -227,7 +228,7 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "robot_control");
   Turtlebot robot;
   ros::NodeHandle n;
-
+  bool aux = false;
   int xGoal, yGoal;
   
   if(argc<2)
@@ -237,7 +238,10 @@ int main(int argc, char** argv)
 	return 0;
   }
 
+  std::cout <<"Prueba"<< argv[1] <<std::endl;
   std::vector<geometry_msgs::Pose> plan = loadPlan(argv[1]);
+  
+  std::cout <<"Prueba despues"<< argv[1] <<std::endl;
   unsigned int cont_wp = 0;
 
   ros::Rate loop_rate(20);
@@ -248,23 +252,33 @@ int main(int argc, char** argv)
   * calling adequately to the command function
   */
 
-  while (ros::ok())
+  while (ros::ok() && cont_wp<3)
   {
-	  //como se hace la llamada a la funcion kinect que parametro se pasa
-    //receiveKinect
-    
-    
+	  
+  std::cout <<"while loop"<<std::endl;
+     std::cout <<"cont_wp"<<plan[cont_wp].position.x<<std::endl;
     xGoal = plan[cont_wp].position.x;
+    
+  std::cout <<"valor xGoal"<<xGoal<<std::endl;
     yGoal = plan[cont_wp].position.y;
     
+    
+  std::cout <<"valor yGoal"<<xGoal<<std::endl;
     if(res){
+      
+  std::cout <<"object detected"<<std::endl;
 		//calculate vector to avoid object
 		tempX = xGoal + vectorResX;
 		tempY = yGoal + vectorResY;
-      robot.command(tempX, tempY);
+      aux = robot.command(tempX, tempY);
     }else{
     
-      robot.command(xGoal,yGoal);
+  std::cout <<"no object"<<std::endl;
+      aux = robot.command(xGoal,yGoal);
+    }
+    if(aux){
+      cont_wp++;
+      aux = false;
     }
     ros::spinOnce();
     

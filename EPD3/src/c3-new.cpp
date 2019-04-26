@@ -84,7 +84,7 @@ bool Turtlebot::command(double gx, double gy)
 	double linear_vel=0.0;
 	double angular_vel=0.0;
 	float dist;
-  	float ang = 0.0;
+  float ang = 0.0;
 	bool ret_val = false;
 
   std::cout <<"llamando al command" <<std::endl;
@@ -127,19 +127,20 @@ bool Turtlebot::command(double gx, double gy)
   ang = ang*180/M_PI;
   
   if(ang > 5.0){
-    angular_vel = 0.5;
-	    	//ROS_INFO("ang:");
+    angular_vel = 0.2;
     linear_vel = 0.0;
   }else if (ang < -5.0){
-    angular_vel = -0.5;
+    angular_vel = -0.2;
     linear_vel = 0.0;
   }
-  //calculate the module of base_goal to know distast towards objective
+  //calculate the module of base_goal to know distand towards objective
    dist = sqrt(pow(base_goal.point.x, 2) + pow(base_goal.point.y, 2));
-  
-	if(abs(dist < 0.5)){
+  std::cout <<"DISTANCIA AL GOAL"<<dist<<std::endl;
+	if(dist < 0.5){
+    std::cout <<"VELOCIDAD 0"<<std::endl;
 		linear_vel =0.0;
     angular_vel=0.0;
+    ret_val = true;
 	}else{
     linear_vel = 0.5;
   }
@@ -172,42 +173,68 @@ void Turtlebot::publish(double angular, double linear)
 //Callback for robot position
 void Turtlebot::receiveKinect(const sensor_msgs::LaserScan& msg)
 {
-	data_scan=msg;
-	// Different variables used to detect obstacles
+    data_scan=msg;
+    // Different variables used to detect obstacles
   	//calcula tamaño del vector
   	int rangeSize = (int) (data_scan.angle_max - data_scan.angle_min)/data_scan.angle_increment;
-  	int i = 1;
+  	int i = 0;
   	int pX = 0, pY = 0, numObs=0;//puntos del vector
   	int rangeDist;
   	float rangeAng;
-	
-	if(!isnan(data_scan.range_min)){
+    bool enc=false;
+    //std::cout <<"KINETIC"<<std::endl;
+
+
+  //busca obstaculos
+    while(i<rangeSize && !enc){
+
+      if(!std::isnan(data_scan.ranges.at(i))){
+        
+        //std::cout <<"Obstaculos encontrado"<<std::endl;
+        enc=true;
+      }
+      i++;
+    }
   
-		res = true;//theres an object ahead
-		
-  		while(i<=rangeSize){
+  //reset loop var
+  i=0;
+  
+	if(enc){
     
-    		if(!isnan(data_scan.ranges[i])){
-			numObs++;
-			rangeAng = data_scan.angle_min * i * data_scan.angle_increment;//calculo del angulo del vector
-
-			rangeDist = data_scan.ranges[i];//distancia al punto
-			//obtenemos todos los puntos 
-			pX = rangeDist * cos(rangeAng);
-			pY = rangeDist * sin(rangeAng);
-
-			//sum all vectors with objects to obtain the result vector
-			vectorResX += pX;
-			vectorResY += pY;
+    	std::cout <<"OBJECT!!"<<std::endl;
+  
+		  res = true;//theres an object ahead
 		
-      
-    		}
+  		while(i<rangeSize){
+        
+        //std::cout <<"Going thru array!!"<<std::endl;
+    
+        if(!std::isnan(data_scan.ranges[i])){
+          
+          //std::cout <<"Calculing vectors"<<std::endl;
+          numObs++;
+          rangeAng = data_scan.angle_min * i * data_scan.angle_increment;//calculo del angulo del vector
+
+          rangeDist = data_scan.ranges[i];//distancia al punto
+          //obtenemos todos los puntos 
+          pX = rangeDist * cos(rangeAng);
+          pY = rangeDist * sin(rangeAng);
+
+          //sum all vectors with objects to obtain the result vector
+          vectorResX += pX;
+          vectorResY += pY;
+    
+        }
+        
+        
+          i++;
     
   		}
 		
 		vectorResX = -vectorResX;
 		vectorResY = -vectorResY; 
 	}else{
+     std::cout <<"NO OBJECT!!"<<std::endl;
 		//theres no object ahead;
 		res = false;
 	}
@@ -233,15 +260,15 @@ int main(int argc, char** argv)
   
   if(argc<2)
   {
-	std::cout << "Insufficient number of parameters" << std::endl;
-	std::cout << "Usage: robot_control <filename>" << std::endl;
-	return 0;
+    std::cout << "Insufficient number of parameters" << std::endl;
+    std::cout << "Usage: robot_control <filename>" << std::endl;
+    return 0;
   }
 
   std::cout <<"Prueba"<< argv[1] <<std::endl;
   std::vector<geometry_msgs::Pose> plan = loadPlan(argv[1]);
   
-  std::cout <<"Prueba despues"<< argv[1] <<std::endl;
+  //std::cout <<"Prueba despues"<< argv[1] <<std::endl;
   unsigned int cont_wp = 0;
 
   ros::Rate loop_rate(20);
@@ -254,31 +281,27 @@ int main(int argc, char** argv)
 
   while (ros::ok() && cont_wp<3)
   {
-	  
-  std::cout <<"while loop"<<std::endl;
-     std::cout <<"cont_wp"<<plan[cont_wp].position.x<<std::endl;
-    xGoal = plan[cont_wp].position.x;
     
-  std::cout <<"valor xGoal"<<xGoal<<std::endl;
-    yGoal = plan[cont_wp].position.y;
+      xGoal = plan[cont_wp].position.x;
+      yGoal = plan[cont_wp].position.y;
     
-    
-  std::cout <<"valor yGoal"<<xGoal<<std::endl;
     if(res){
       
-  std::cout <<"object detected"<<std::endl;
-		//calculate vector to avoid object
-		tempX = xGoal + vectorResX;
-		tempY = yGoal + vectorResY;
+      std::cout <<"object detected"<<std::endl;
+		  //calculate vector to avoid object
+		  tempX = xGoal + vectorResX;
+		  tempY = yGoal + vectorResY;
       aux = robot.command(tempX, tempY);
+      
     }else{
     
-  std::cout <<"no object"<<std::endl;
+      std::cout <<"no object"<<std::endl;
       aux = robot.command(xGoal,yGoal);
     }
     if(aux){
       cont_wp++;
       aux = false;
+      std::cout <<"GOAL REACHED!!"<<std::endl;
     }
     ros::spinOnce();
     
@@ -291,7 +314,7 @@ int main(int argc, char** argv)
 
 }
 
-std::vector<geometry_msgs::Pose> loadPlan(const char *filename) {
+  std::vector<geometry_msgs::Pose> loadPlan(const char *filename) {
   std::vector<geometry_msgs::Pose> plan;
   double x,y;
   
@@ -362,6 +385,13 @@ void visualizePlan(const std::vector< geometry_msgs::Pose >& plan, ros::Publishe
     marker_pub.publish(marker);
   }
 }
+
+
+
+
+
+
+
 
 
 

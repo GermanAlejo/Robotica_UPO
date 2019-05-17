@@ -1,5 +1,4 @@
 
-
 #include <ros/ros.h>
 #include <geometry_msgs/Twist.h>
 #include <tf/tf.h>
@@ -19,10 +18,11 @@
 // Representation (RVIZ)
 #include <visualization_msgs/Marker.h>
 
-	bool res = false;//variable that represents whether theres objects or no objects at all
-  int tempX, tempY;
-	int vectorResX = 0;
-	int vectorResY = 0;
+  float tempX, tempY;
+	float vectorResX = 0;
+	float vectorResY = 0;
+
+	float dist=0;//distancia al goal
 /**
 * Our class to control the robot
 * It has members to store the robot pose, and
@@ -83,11 +83,10 @@ bool Turtlebot::command(double gx, double gy)
 
 	double linear_vel=0.0;
 	double angular_vel=0.0;
-	float dist;
-  float ang = 0.0;
+  	float ang = 0.0;
 	bool ret_val = false;
 
-  std::cout <<"llamando al command" <<std::endl;
+  	std::cout <<"llamando al command" <<std::endl;
 	//Transform the goal to the local frame
 	geometry_msgs::PointStamped goal;
 	geometry_msgs::PointStamped base_goal;
@@ -103,9 +102,10 @@ bool Turtlebot::command(double gx, double gy)
   	goal.point.z = 0.0;
 
 	try{
-	    	listener.transformPoint("base_link", goal, base_goal);
+	    
+		listener.transformPoint("base_link", goal, base_goal);
 
-	    	ROS_INFO("goal: (%.2f, %.2f. %.2f) -----> base_goal: (%.2f, %.2f, %.2f) at time %.2f",
+	    ROS_INFO("goal: (%.2f, %.2f. %.2f) -----> base_goal: (%.2f, %.2f, %.2f) at time %.2f",
 		goal.point.x, goal.point.y, goal.point.z,
 		base_goal.point.x, base_goal.point.y, base_goal.point.z, base_goal.header.stamp.toSec());
 
@@ -122,34 +122,70 @@ bool Turtlebot::command(double gx, double gy)
 	*/
 	 //calculate angle if is minimal then we are looking towards the goal
   
-  std::cout <<"command" <<std::endl;
-  ang = atan2(base_goal.point.y, base_goal.point.x);
-  ang = ang*180/M_PI;
+  /*
+  *Si hay objeto las variables de vectorRes modificaran las variables auxiliares
+  *para que el robot modifique su movimiento para evadir el obstaculo
+  *si no hay obscaulo las variables valdran 0 manteniendo el goal original
+  */
+  tempX = base_goal.point.x + 0.01*vectorResX;
+  tempY = base_goal.point.y + 0.01*vectorResY;
+  dist = sqrt(pow(tempX, 2) + pow(tempY, 2));
   
-  if(ang > 5.0){
-    angular_vel = 0.2;
-    linear_vel = 0.0;
-  }else if (ang < -5.0){
-    angular_vel = -0.2;
-    linear_vel = 0.0;
-  }
-  //calculate the module of base_goal to know distand towards objective
-   dist = sqrt(pow(base_goal.point.x, 2) + pow(base_goal.point.y, 2));
-  std::cout <<"DISTANCIA AL GOAL"<<dist<<std::endl;
-	if(dist < 0.5){
-    std::cout <<"VELOCIDAD 0"<<std::endl;
-		linear_vel =0.0;
-    angular_vel=0.0;
-    ret_val = true;
+  
+  std::cout <<"VECTORRESX "<<vectorResX<<std::endl;
+  std::cout <<"VECTORRESY "<<vectorResY<<std::endl;
+  //std::cout <<"command" <<std::endl;
+  ang = atan2(tempY, tempX);
+ // ang = ang*180/M_PI;
+  std::cout <<"DIST "<<dist<<std::endl;
+  std::cout <<"ANG "<<ang<<std::endl;
+  //controla las velocidades
+	/*
+	Las velocidades al estar controladas en funcion de la distancia y el angulo
+	se realentizan cuando no hay objetos, cuanto mas cerca este del objetivo mas lento
+	aumentar la velocidad cuando no haya objetos detectados o el goal esta muy cerca
+	*/
+	//object
+	if(vectorResX != 0 && vectorResY != 0){
+	
+		angular_vel = 0.12*ang;//velocidad angular controlada en funcion del angulo
+  		linear_vel = 0.09*dist;//velocidad linear controlada en funcion de la distancia al goal
+		
+	//no object
 	}else{
-    linear_vel = 0.5;
+		
+		angular_vel = 0.2*ang;
+		linear_vel = 0.3*dist;
+	
+	}
+	
+ 
+  
+  if(angular_vel > 0.8){
+    angular_vel = 0.8;
   }
+  
+  if(linear_vel > 1){
+    linear_vel = 1;
+  }
+  
 
-        publish(angular_vel,linear_vel);    
+  
+  //calculate the module of base_goal to know distand towards objective
+  dist = sqrt(pow(base_goal.point.x, 2) + pow(base_goal.point.y, 2));
+  std::cout <<"DISTANCIA AL GOAL"<<dist<<std::endl;
+  //goal reached
+	if(dist < 0.5){
+		linear_vel =0.0;
+    	angular_vel=0.0;
+    	ret_val = true;
+	}
+  std::cout <<"LINEAR_VEL"<<linear_vel<<std::endl;
+  std::cout <<"ANGULAR_VEL"<<angular_vel<<std::endl;
+  publish(angular_vel,linear_vel);    
 
 
-  	return ret_val;
-	//return;
+  return ret_val;
 	
 }
 
@@ -162,7 +198,6 @@ void Turtlebot::publish(double angular, double linear)
     vel.angular.z = angular;
     vel.linear.x = linear;
 
-	//std::cout << "Velocidades: " << vel.linear.x << ", " << vel.angular.z << std::endl;
 
     vel_pub_.publish(vel);    
 
@@ -178,22 +213,27 @@ void Turtlebot::receiveKinect(const sensor_msgs::LaserScan& msg)
   	//calcula tamaño del vector
   	int rangeSize = (int) (data_scan.angle_max - data_scan.angle_min)/data_scan.angle_increment;
   	int i = 0;
-  	int pX = 0, pY = 0, numObs=0;//puntos del vector
-  	int rangeDist;
+  	float pX = 0, pY = 0;
+  	float rangeDist;
   	float rangeAng;
     bool enc=false;
-    //std::cout <<"KINETIC"<<std::endl;
 
+	//print range size
+    std::cout <<"Range Size"<<rangeSize<<std::endl;
+  	
+    vectorResX = 0;
+    vectorResY = 0;
 
   //busca obstaculos
-    while(i<rangeSize && !enc){
+	while(i<rangeSize && !enc){
 
-      if(!std::isnan(data_scan.ranges.at(i))){
+		//no tengas en cuenta objetos que no esten al frente de esta forma no realentizaran el robot
+    	if(!std::isnan(data_scan.ranges.at(i)) && (i>160 && i<449)){
         
-        //std::cout <<"Obstaculos encontrado"<<std::endl;
-        enc=true;
-      }
-      i++;
+        	enc=true;
+      	}
+		
+    	i++;
     }
   
   //reset loop var
@@ -203,40 +243,50 @@ void Turtlebot::receiveKinect(const sensor_msgs::LaserScan& msg)
     
     	std::cout <<"OBJECT!!"<<std::endl;
   
-		  res = true;//theres an object ahead
-		
   		while(i<rangeSize){
-        
-        //std::cout <<"Going thru array!!"<<std::endl;
+   
     
-        if(!std::isnan(data_scan.ranges[i])){
-          
-          //std::cout <<"Calculing vectors"<<std::endl;
-          numObs++;
-          rangeAng = data_scan.angle_min * i * data_scan.angle_increment;//calculo del angulo del vector
+			if(!std::isnan(data_scan.ranges[i])){
 
-          rangeDist = data_scan.ranges[i];//distancia al punto
-          //obtenemos todos los puntos 
-          pX = rangeDist * cos(rangeAng);
-          pY = rangeDist * sin(rangeAng);
+			  rangeAng = data_scan.angle_min + i * data_scan.angle_increment;//calculo del angulo del vector
 
-          //sum all vectors with objects to obtain the result vector
-          vectorResX += pX;
-          vectorResY += pY;
-    
-        }
+			  rangeDist = data_scan.ranges[i];//distancia al punto
+			 // if(dist!=0 && rangeDist>dist){
+				//obtenemos todos los puntos 
+				pX = rangeDist * cos(rangeAng);
+				pY = rangeDist * sin(rangeAng);
+
+				//controla que el calculo del punto no de un numero muy alto
+				if(rangeDist<0.1)rangeDist=0.1;
+
+				//no tengas en cuenta objetos lejanos
+				if(rangeDist<3){  
+				  //sum all vectors with objects to obtain the result vector
+				  vectorResX += pX/(rangeDist*rangeDist);
+				  vectorResY += pY/(rangeDist*rangeDist);
+				} 
+		   //  }    
+
+			}
         
         
           i++;
     
   		}
 		
+		std::cout <<"Distancia al objeto"<<rangeDist<<std::endl;
 		vectorResX = -vectorResX;
 		vectorResY = -vectorResY; 
+		/*
+		*EL robot acelera como si no hubiera ningun objeto aunque lo hubiese
+		*este parametro parace arreglarlo
+		*/
+		enc = false;//not sure
+    
 	}else{
      std::cout <<"NO OBJECT!!"<<std::endl;
 		//theres no object ahead;
-		res = false;
+		
 	}
   
 
@@ -285,19 +335,8 @@ int main(int argc, char** argv)
       xGoal = plan[cont_wp].position.x;
       yGoal = plan[cont_wp].position.y;
     
-    if(res){
-      
-      std::cout <<"object detected"<<std::endl;
-		  //calculate vector to avoid object
-		  tempX = xGoal + vectorResX;
-		  tempY = yGoal + vectorResY;
-      aux = robot.command(tempX, tempY);
-      
-    }else{
-    
-      std::cout <<"no object"<<std::endl;
       aux = robot.command(xGoal,yGoal);
-    }
+    
     if(aux){
       cont_wp++;
       aux = false;
@@ -305,7 +344,7 @@ int main(int argc, char** argv)
     }
     ros::spinOnce();
     
-    visualizePlan(plan, marker_pub );
+    visualizePlan(plan, marker_pub);
     
     loop_rate.sleep();
   }

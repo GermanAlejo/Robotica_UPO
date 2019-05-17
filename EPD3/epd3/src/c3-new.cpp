@@ -18,11 +18,12 @@
 // Representation (RVIZ)
 #include <visualization_msgs/Marker.h>
 
-  float tempX, tempY;
+  	float tempX, tempY;//variables temporales para indicar el objetivo
 	float vectorResX = 0;
 	float vectorResY = 0;
 
-	float dist=0;//distancia al goal
+	float dist=0;//distancia al goal/punto de evasion
+	float distToGoal;//variable fija al goal, usada para dar peso al goal cuando hay un objeto cerca del goal
 /**
 * Our class to control the robot
 * It has members to store the robot pose, and
@@ -130,7 +131,9 @@ bool Turtlebot::command(double gx, double gy)
   tempX = base_goal.point.x + 0.01*vectorResX;
   tempY = base_goal.point.y + 0.01*vectorResY;
   dist = sqrt(pow(tempX, 2) + pow(tempY, 2));
-  
+
+  //calculate the module of base_goal to know distand towards objective
+  distToGoal = sqrt(pow(base_goal.point.x, 2) + pow(base_goal.point.y, 2));
   
   std::cout <<"VECTORRESX "<<vectorResX<<std::endl;
   std::cout <<"VECTORRESY "<<vectorResY<<std::endl;
@@ -165,17 +168,14 @@ bool Turtlebot::command(double gx, double gy)
     angular_vel = 0.8;
   }
   
-  if(linear_vel > 1){
-    linear_vel = 1;
+  if(linear_vel > 0.6){
+    linear_vel = 0.6;
   }
   
 
-  
-  //calculate the module of base_goal to know distand towards objective
-  dist = sqrt(pow(base_goal.point.x, 2) + pow(base_goal.point.y, 2));
-  std::cout <<"DISTANCIA AL GOAL"<<dist<<std::endl;
+  std::cout <<"DISTANCIA AL GOAL"<<distToGoal<<std::endl;
   //goal reached
-	if(dist < 0.5){
+	if(distToGoal < 0.8){
 		linear_vel =0.0;
     	angular_vel=0.0;
     	ret_val = true;
@@ -228,7 +228,7 @@ void Turtlebot::receiveKinect(const sensor_msgs::LaserScan& msg)
 	while(i<rangeSize && !enc){
 
 		//no tengas en cuenta objetos que no esten al frente de esta forma no realentizaran el robot
-    	if(!std::isnan(data_scan.ranges.at(i)) && (i>160 && i<449)){
+    	if(!std::isnan(data_scan.ranges.at(i)) && (i>100 && i<509)){
         
         	enc=true;
       	}
@@ -251,21 +251,23 @@ void Turtlebot::receiveKinect(const sensor_msgs::LaserScan& msg)
 			  rangeAng = data_scan.angle_min + i * data_scan.angle_increment;//calculo del angulo del vector
 
 			  rangeDist = data_scan.ranges[i];//distancia al punto
-			 // if(dist!=0 && rangeDist>dist){
-				//obtenemos todos los puntos 
-				pX = rangeDist * cos(rangeAng);
-				pY = rangeDist * sin(rangeAng);
+				
+				//si la distancia al goal es menor que a la del objeto, ignora el objeto	
+			  	if(distToGoal>rangeDist){
+					//obtenemos todos los puntos 
+					pX = rangeDist * cos(rangeAng);
+					pY = rangeDist * sin(rangeAng);
 
-				//controla que el calculo del punto no de un numero muy alto
-				if(rangeDist<0.1)rangeDist=0.1;
+					//controla que el calculo del punto no de un numero muy alto
+					if(rangeDist<0.0001)rangeDist=0.0001;
 
-				//no tengas en cuenta objetos lejanos
-				if(rangeDist<3){  
-				  //sum all vectors with objects to obtain the result vector
-				  vectorResX += pX/(rangeDist*rangeDist);
-				  vectorResY += pY/(rangeDist*rangeDist);
-				} 
-		   //  }    
+					//no tengas en cuenta objetos lejanos
+					if(rangeDist<3){  
+					  //sum all vectors with objects to obtain the result vector
+					  vectorResX += pX/(rangeDist*rangeDist);
+					  vectorResY += pY/(rangeDist*rangeDist);
+					} 
+				 }    
 
 			}
         

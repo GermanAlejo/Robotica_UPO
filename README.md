@@ -1,5 +1,5 @@
 # Robotica_UPO
-Repositorio con todas las epds correspondientes a la asignatura de robotica de la upo
+Repositorio con todas las epds y challenges correspondientes a la asignatura de robotica de la upo
 
 Usefull commads:
 
